@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Gerador e Editor de Escala de Plantão</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- html2pdf.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <!-- html2canvas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+
+    .excel-table {
+      border-collapse: collapse;
+      width: 100%;
+      table-layout: fixed;
+      font-size: 11px;
+      background-color: #ffffff;
+      border: 2px solid #334155;
+    }
+    .excel-table th, .excel-table td {
+      border: 1px solid #64748b;
+      text-align: center;
+      padding: 4px 1px;
+      vertical-align: middle;
+      font-family: Arial, sans-serif;
+      word-break: break-word;
+      overflow: hidden;
+    }
+    
+    .th-day {
+      background-color: #ffffff; 
+      color: #0f172a;
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 0.2px;
+      padding: 4px 1px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .th-date {
+      background-color: #ffffff; 
+      color: #0f172a;
+      font-weight: 700;
+      font-size: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .td-shift-label {
+      background-color: #f1f5f9;
+      font-weight: 700;
+      color: #0f172a;
+      text-align: left !important;
+      padding-left: 6px !important;
+      font-size: 10px;
+      width: 125px;
+    }
+
+    .td-cell {
+      background-color: #ffffff;
+      color: #0f172a;
+      font-size: 10.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.15s ease, outline 0.1s ease;
+      user-select: none;
+      min-width: 48px;
+    }
+    .td-cell:hover {
+      outline: 2px solid #2563eb;
+      z-index: 5;
+    }
+
+    .preview-container {
+      width: 100%;
+      overflow-x: auto;
+      padding: 4px 0;
+    }
+
+    .palette-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      border: 2px solid #cbd5e1;
+      cursor: pointer;
+      transition: transform 0.1s ease, border-color 0.1s ease;
+    }
+    .palette-btn:hover, .palette-btn.active {
+      transform: scale(1.15);
+      border-color: #0f172a;
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .no-print { display: none !important; }
+      .excel-table { box-shadow: none; margin: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 pb-20 lg:pb-0">
+
+  <!-- Header -->
+  <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50 py-3 px-4 no-print border-b border-slate-700">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <i class="fa-solid fa-table-cells text-xl text-emerald-400"></i>
+        <h1 class="text-base font-bold tracking-wide">Gerador & Editor de Escala</h1>
+      </div>
+      <div class="flex gap-2 items-center">
+        <span id="saveBadge" class="text-[11px] text-emerald-400 font-semibold hidden sm:inline-block mr-2">
+          <i class="fa-solid fa-cloud-check"></i> Guardado
+        </span>
+        <button onclick="resetarDados()" class="bg-slate-800 hover:bg-red-700 text-white text-xs font-semibold py-2 px-3 rounded-lg shadow transition flex items-center gap-1" title="Reiniciar dados do zero">
+          <i class="fa-solid fa-rotate-right"></i> Reset
+        </button>
+        <button onclick="exportPNG()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 px-3 rounded-lg shadow transition flex items-center gap-1">
+          <i class="fa-solid fa-file-image"></i> PNG
+        </button>
+        <button onclick="exportPDF()" class="bg-white text-slate-900 hover:bg-slate-100 text-xs font-bold py-2 px-3 rounded-lg shadow transition flex items-center gap-1">
+          <i class="fa-solid fa-file-pdf text-red-600"></i> PDF
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navegação por Abas (Mobile) -->
+  <nav class="bg-white border-b border-slate-200 sticky top-[49px] z-40 lg:hidden no-print">
+    <div class="grid grid-cols-4 text-center text-xs font-bold text-slate-600">
+      <button onclick="switchTab('tab-equipe')" id="btn-tab-equipe" class="py-3 border-b-2 border-emerald-600 text-emerald-800 flex flex-col items-center gap-1">
+        <i class="fa-solid fa-users text-sm"></i> Equipa
+      </button>
+      <button onclick="switchTab('tab-fixar')" id="btn-tab-fixar" class="py-3 border-b-2 border-transparent flex flex-col items-center gap-1">
+        <i class="fa-solid fa-store text-sm"></i> Loja
+      </button>
+      <button onclick="switchTab('tab-cores')" id="btn-tab-cores" class="py-3 border-b-2 border-transparent flex flex-col items-center gap-1">
+        <i class="fa-solid fa-palette text-sm"></i> Cores
+      </button>
+      <button onclick="switchTab('tab-preview')" id="btn-tab-preview" class="py-3 border-b-2 border-transparent flex flex-col items-center gap-1">
+        <i class="fa-solid fa-table-cells text-sm"></i> Escala
+      </button>
+    </div>
+  </nav>
+
+  <!-- Conteúdo Principal -->
+  <main class="max-w-[1440px] mx-auto px-2 sm:px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    
+    <!-- Painel Lateral (Esquerda) -->
+    <section class="lg:col-span-4 space-y-6 no-print">
+      
+      <!-- ABA 1: EQUIPA E CONFIGURAÇÃO -->
+      <div id="tab-equipe" class="block bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+        <h3 class="text-sm font-bold text-slate-800 border-b pb-2 flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-emerald-700"></i> Mês, Ano e Equipa
+        </h3>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Mês</label>
+            <select id="selectMes" onchange="alterarMesAno()" class="w-full border rounded-lg p-2 text-xs font-bold bg-slate-50">
+              <option value="8">Setembro</option>
+              <option value="9" selected>Outubro</option>
+              <option value="10">Novembro</option>
+              <option value="11">Dezembro</option>
+              <option value="0">Janeiro</option>
+              <option value="1">Fevereiro</option>
+              <option value="2">Março</option>
+              <option value="3">Abril</option>
+              <option value="4">Maio</option>
+              <option value="5">Junho</option>
+              <option value="6">Julho</option>
+              <option value="7">Agosto</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Ano</label>
+            <input type="number" id="inputAno" value="2026" onchange="alterarMesAno()" class="w-full border rounded-lg p-2 text-xs font-bold">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Adicionar Membro à Equipa</label>
+          <div class="flex gap-2">
+            <input type="text" id="inputNovoNome" placeholder="Ex: Mariana" class="flex-1 border rounded-lg p-2 text-xs">
+            <button onclick="adicionarMembro()" class="bg-emerald-700 text-white font-semibold text-xs px-3 py-2 rounded-lg hover:bg-emerald-800">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-2">Equipa Registada (<span id="countMembros">0</span>)</label>
+          <div id="listaMembros" class="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-50 border rounded-lg"></div>
+        </div>
+
+        <hr class="border-slate-200">
+
+        <!-- Indisponibilidades -->
+        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1">
+          <i class="fa-solid fa-user-slash text-red-500"></i> Indisponibilidade por Período
+        </h4>
+
+        <div class="space-y-2">
+          <div>
+            <label class="block text-[11px] text-slate-500 font-semibold mb-0.5">Membro:</label>
+            <select id="selectPessoaRestricao" class="w-full border rounded-lg p-1.5 text-xs font-medium"></select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-slate-500 font-semibold mb-0.5">Data Início:</label>
+              <input type="date" id="inputDataInicioRestricao" class="w-full border rounded-lg p-1.5 text-xs">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-500 font-semibold mb-0.5">Data Fim:</label>
+              <input type="date" id="inputDataFimRestricao" class="w-full border rounded-lg p-1.5 text-xs">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-slate-500 font-semibold mb-0.5">Turno Atingido:</label>
+            <select id="selectTurnoRestricao" class="w-full border rounded-lg p-1.5 text-xs">
+              <option value="Qualquer">Dia Todo (Manhã e Tarde)</option>
+              <option value="Manhã">Apenas Manhã</option>
+              <option value="Tarde">Apenas Tarde</option>
+            </select>
+          </div>
+        </div>
+
+        <button onclick="adicionarRestricao()" class="w-full bg-slate-800 text-white font-semibold text-xs py-2 rounded-lg hover:bg-slate-700">
+          <i class="fa-solid fa-ban mr-1"></i> Registar Bloqueio de Período
+        </button>
+
+        <div id="listaRestricoes" class="space-y-1 max-h-28 overflow-y-auto pr-1"></div>
+
+        <button onclick="gerarEscalaAutomatica()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm">
+          <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i> Gerar Escala Automática
+        </button>
+      </div>
+
+      <!-- ABA 2: FIXAR PLANTÕES DE LOJA -->
+      <div id="tab-fixar" class="hidden lg:block bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+        <h3 class="text-sm font-bold text-slate-800 border-b pb-2 flex items-center gap-2">
+          <i class="fa-solid fa-store text-emerald-700"></i> Definir / Fixar Plantões de Loja
+        </h3>
+
+        <div class="space-y-2">
+          <div>
+            <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Plantonista de Loja:</label>
+            <select id="selectPessoaLojaFixa" class="w-full border rounded-lg p-2 text-xs font-medium"></select>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Dia do Mês:</label>
+              <input type="number" id="inputDiaLojaFixo" min="1" max="31" placeholder="Ex: 5" class="w-full border rounded-lg p-2 text-xs">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Turno:</label>
+              <select id="selectTurnoLojaFixo" class="w-full border rounded-lg p-2 text-xs">
+                <option value="Manhã">Manhã</option>
+                <option value="Tarde">Tarde</option>
+                <option value="Dia Todo">Dia Todo</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Posição / Slot:</label>
+              <select id="selectSlotLojaFixo" class="w-full border rounded-lg p-2 text-xs font-bold text-emerald-800 bg-emerald-50 border-emerald-300">
+                <option value="1">Slot 1 (Coluna 1)</option>
+                <option value="2">Slot 2 (Coluna 2)</option>
+              </select>
+            </div>
+          </div>
+
+          <button onclick="adicionarPlantaoLojaFixo()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs py-2 rounded-lg transition">
+            <i class="fa-solid fa-thumbtack mr-1"></i> Fixar Plantão de Loja
+          </button>
+        </div>
+
+        <hr class="border-slate-200">
+
+        <div>
+          <label class="block text-xs font-semibold uppercase text-slate-500 mb-2">Plantões Fixados:</label>
+          <div id="listaPlantoesLojaFixos" class="space-y-1.5 max-h-36 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+
+      <!-- ABA 3: PALETA DE CORES -->
+      <div id="tab-cores" class="hidden lg:block bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+        <h3 class="text-sm font-bold text-slate-800 border-b pb-2 flex items-center gap-2">
+          <i class="fa-solid fa-palette text-emerald-700"></i> Seletor de Cores
+        </h3>
+
+        <div class="space-y-2">
+          <label class="block text-xs font-semibold uppercase text-slate-500">Pincel Ativo:</label>
+          <div class="flex flex-wrap gap-2 items-center">
+            <button onclick="setCorAtiva('#a9d08e', this)" class="palette-btn active bg-[#a9d08e]" title="Plantão de Loja (Verde)"></button>
+            <button onclick="setCorAtiva('#fce4d6', this)" class="palette-btn bg-[#fce4d6]" title="Feriado (Vermelho/Salmão)"></button>
+            <button onclick="setCorAtiva('#fff2cc', this)" class="palette-btn bg-[#fff2cc]" title="Fim de Semana (Amarelo)"></button>
+            <button onclick="setCorAtiva('#b4c6e7', this)" class="palette-btn bg-[#b4c6e7]" title="Azul Pastel"></button>
+            <button onclick="setCorAtiva('#c6e0b4', this)" class="palette-btn bg-[#c6e0b4]" title="Verde Claro"></button>
+            <button onclick="setCorAtiva('#f8cbad', this)" class="palette-btn bg-[#f8cbad]" title="Laranja Pastel"></button>
+            <button onclick="setCorAtiva('#ffffff', this)" class="palette-btn bg-white border-2 border-slate-300" title="Branco"></button>
+            
+            <div class="flex items-center gap-1 ml-2">
+              <input type="color" id="pickerCorLivre" value="#a9d08e" onchange="setCorAtiva(this.value, null)" class="w-8 h-8 rounded border cursor-pointer">
+            </div>
+          </div>
+        </div>
+
+        <button onclick="limparCoresTabela()" class="w-full text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold p-2.5 rounded-lg transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-rotate-left"></i> Limpar Cores de Toda a Tabela
+        </button>
+      </div>
+
+      <!-- PAINEL DE CONTAGEM -->
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-3">
+        <h3 class="text-sm font-bold text-slate-800 border-b pb-2 flex items-center justify-between">
+          <span><i class="fa-solid fa-chart-simple text-emerald-700"></i> Total de Plantões / Membro</span>
+        </h3>
+        <div id="painelEstatisticas" class="space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs"></div>
+      </div>
+
+    </section>
+
+    <!-- PREVIEW ESCALA -->
+    <section id="tab-preview" class="lg:col-span-8 hidden lg:block preview-container">
+      <div id="previewWrapper" class="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-slate-200 w-full overflow-x-auto">
+        <div id="scheduleCapture" class="bg-white p-1 min-w-[760px] w-full">
+          
+          <div class="flex flex-col sm:flex-row sm:items-end justify-between mb-3 border-b-2 border-slate-800 pb-2 gap-2">
+            <div>
+              <h2 class="text-lg font-black text-slate-900 uppercase tracking-wider">Escala de Plantão</h2>
+              <p class="text-xs font-bold text-slate-600" id="txtMesAnoHeader">Outubro / 2026</p>
+            </div>
+            <div class="flex flex-wrap gap-2.5 text-[10.5px] font-semibold text-slate-700">
+              <span class="flex items-center gap-1"><span class="w-3.5 h-3.5 bg-[#fce4d6] border border-slate-500 rounded-sm inline-block"></span> Feriado</span>
+              <span class="flex items-center gap-1 font-bold text-emerald-900"><span class="w-3.5 h-3.5 bg-[#a9d08e] border border-slate-500 rounded-sm inline-block"></span> Plantão de Loja</span>
+              <span class="flex items-center gap-1 text-amber-900"><span class="w-3.5 h-3.5 bg-[#fff2cc] border border-slate-500 rounded-sm inline-block"></span> Final de Semana / Home Office</span>
+            </div>
+          </div>
+
+          <div id="containerTabela" class="space-y-4 w-full"></div>
+
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const CHAVE_STORAGE = "ESCALA_PLANTAO_DATA_V1";
+
+    let membros = [
+      "Renata", "Juliana", "Alexandre", "João", "Júlio", "Cláudia", 
+      "Lílian", "Fabiano", "Rosaura", "Graziela", "Endara", "Ediana", "Bruna", "Denize"
+    ];
+
+    let restricoes = [];
+    let plantoesLojaFixos = [];
+    let tabelaEstilosEConteudo = {}; // Guarda cores e texto personalizado de cada célula
+    let corPincelAtiva = "#a9d08e";
+
+    // CARREGAR DADOS AO ABRIR
+    function carregarDadosIniciais() {
+      const dadosSalvos = localStorage.getItem(CHAVE_STORAGE);
+      if (dadosSalvos) {
+        try {
+          const parsed = JSON.parse(dadosSalvos);
+          if (parsed.membros) membros = parsed.membros;
+          if (parsed.restricoes) restricoes = parsed.restricoes;
+          if (parsed.plantoesLojaFixos) plantoesLojaFixos = parsed.plantoesLojaFixos;
+          if (parsed.tabelaEstilosEConteudo) tabelaEstilosEConteudo = parsed.tabelaEstilosEConteudo;
+          if (parsed.mes !== undefined) document.getElementById('selectMes').value = parsed.mes;
+          if (parsed.ano !== undefined) document.getElementById('inputAno').value = parsed.ano;
+        } catch(e) {
+          console.error("Erro ao carregar dados do localStorage", e);
+        }
+      }
+
+      renderMembros();
+      renderRestricoes();
+      renderPlantoesLojaFixos();
+      gerarTabelaEstrutura(false); // Gera tabela sem apagar dados guardados
+    }
+
+    // SALVAR TUDO NO LOCALSTORAGE
+    function salvarDados() {
+      // Captura o estado atual das cores e textos das células
+      document.querySelectorAll('.excel-table th, .excel-table td').forEach(cell => {
+        if (cell.id) {
+          const bg = rgbToHex(window.getComputedStyle(cell).backgroundColor);
+          tabelaEstilosEConteudo[cell.id] = {
+            bg: bg,
+            text: cell.innerText
+          };
+        }
+      });
+
+      const payload = {
+        membros,
+        restricoes,
+        plantoesLojaFixos,
+        tabelaEstilosEConteudo,
+        mes: document.getElementById('selectMes').value,
+        ano: document.getElementById('inputAno').value
+      };
+
+      localStorage.setItem(CHAVE_STORAGE, JSON.stringify(payload));
+
+      // Mostra aviso visual rápido de "Guardado"
+      const badge = document.getElementById('saveBadge');
+      if (badge) {
+        badge.classList.remove('hidden');
+        setTimeout(() => badge.classList.add('hidden'), 1500);
+      }
+    }
+
+    function resetarDados() {
+      if (confirm("Tem certeza que deseja apagar todos os dados guardados e reiniciar a escala?")) {
+        localStorage.removeItem(CHAVE_STORAGE);
+        location.reload();
+      }
+    }
+
+    function switchTab(tabId) {
+      if (window.innerWidth >= 1024) return;
+      document.getElementById('tab-equipe').classList.add('hidden');
+      document.getElementById('tab-fixar').classList.add('hidden');
+      document.getElementById('tab-cores').classList.add('hidden');
+      document.getElementById('tab-preview').classList.add('hidden');
+
+      document.getElementById('btn-tab-equipe').className = "py-3 border-b-2 border-transparent flex flex-col items-center gap-1";
+      document.getElementById('btn-tab-fixar').className = "py-3 border-b-2 border-transparent flex flex-col items-center gap-1";
+      document.getElementById('btn-tab-cores').className = "py-3 border-b-2 border-transparent flex flex-col items-center gap-1";
+      document.getElementById('btn-tab-preview').className = "py-3 border-b-2 border-transparent flex flex-col items-center gap-1";
+
+      const activeBtn = document.getElementById('btn-' + tabId);
+      if (activeBtn) activeBtn.className = "py-3 border-b-2 border-emerald-600 text-emerald-800 flex flex-col items-center gap-1 font-bold";
+
+      document.getElementById(tabId).classList.remove('hidden');
+    }
+
+    function setCorAtiva(cor, btn) {
+      corPincelAtiva = cor;
+      if (btn) {
+        document.querySelectorAll('.palette-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+    }
+
+    function renderMembros() {
+      const container = document.getElementById('listaMembros');
+      const selectRestricao = document.getElementById('selectPessoaRestricao');
+      const selectLojaFixa = document.getElementById('selectPessoaLojaFixa');
+      
+      container.innerHTML = '';
+      selectRestricao.innerHTML = '';
+      selectLojaFixa.innerHTML = '';
+      document.getElementById('countMembros').innerText = membros.length;
+
+      membros.forEach((m, idx) => {
+        const tag = document.createElement('span');
+        tag.className = "inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-900 text-xs font-semibold rounded-full";
+        tag.innerHTML = `${m} <i class="fa-solid fa-xmark text-emerald-700 hover:text-red-600 cursor-pointer" onclick="removerMembro(${idx})"></i>`;
+        container.appendChild(tag);
+
+        const opt1 = document.createElement('option');
+        opt1.value = m; opt1.innerText = m;
+        selectRestricao.appendChild(opt1);
+
+        const opt2 = document.createElement('option');
+        opt2.value = m; opt2.innerText = m;
+        selectLojaFixa.appendChild(opt2);
+      });
+
+      atualizarEstatisticas();
+    }
+
+    function adicionarMembro() {
+      const input = document.getElementById('inputNovoNome');
+      const nome = input.value.trim();
+      if (nome && !membros.includes(nome)) {
+        membros.push(nome);
+        input.value = '';
+        renderMembros();
+        salvarDados();
+      }
+    }
+
+    function removerMembro(idx) {
+      membros.splice(idx, 1);
+      renderMembros();
+      salvarDados();
+    }
+
+    function adicionarRestricao() {
+      const pessoa = document.getElementById('selectPessoaRestricao').value;
+      const dataInicioVal = document.getElementById('inputDataInicioRestricao').value;
+      const dataFimVal = document.getElementById('inputDataFimRestricao').value;
+      const turno = document.getElementById('selectTurnoRestricao').value;
+
+      if (!pessoa || !dataInicioVal || !dataFimVal) {
+        alert("Por favor, selecione o membro e as datas.");
+        return;
+      }
+
+      restricoes.push({ pessoa, dataInicio: dataInicioVal, dataFim: dataFimVal, turno });
+      document.getElementById('inputDataInicioRestricao').value = '';
+      document.getElementById('inputDataFimRestricao').value = '';
+      renderRestricoes();
+      salvarDados();
+    }
+
+    function removerRestricao(idx) {
+      restricoes.splice(idx, 1);
+      renderRestricoes();
+      salvarDados();
+    }
+
+    function renderRestricoes() {
+      const container = document.getElementById('listaRestricoes');
+      container.innerHTML = '';
+
+      if (restricoes.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 italic">Nenhum bloqueio registado.</p>`;
+        return;
+      }
+
+      restricoes.forEach((r, idx) => {
+        const dIniStr = r.dataInicio.split('-').reverse().join('/');
+        const dFimStr = r.dataFim.split('-').reverse().join('/');
+        
+        const div = document.createElement('div');
+        div.className = "flex justify-between items-center text-xs p-1.5 bg-red-50 border border-red-200 text-red-800 rounded-lg";
+        div.innerHTML = `
+          <span><strong>${r.pessoa}</strong>: ${dIniStr} a ${dFimStr} (${r.turno})</span>
+          <i class="fa-solid fa-trash cursor-pointer text-red-600 hover:text-red-800" onclick="removerRestricao(${idx})"></i>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function aplicarPlantoesFixosNoGrid() {
+      plantoesLojaFixos.forEach(p => {
+        const slotNum = p.slot || 1;
+        if (p.turno === "Manhã" || p.turno === "Dia Todo") {
+          const slot = document.getElementById(`slot_${p.dia}_M${slotNum}`);
+          if (slot) {
+            slot.innerText = p.pessoa;
+            slot.style.backgroundColor = '#a9d08e';
+          }
+        }
+        if (p.turno === "Tarde" || p.turno === "Dia Todo") {
+          const slot = document.getElementById(`slot_${p.dia}_T${slotNum}`);
+          if (slot) {
+            slot.innerText = p.pessoa;
+            slot.style.backgroundColor = '#a9d08e';
+          }
+        }
+      });
+    }
+
+    function adicionarPlantaoLojaFixo() {
+      const pessoa = document.getElementById('selectPessoaLojaFixa').value;
+      const dia = parseInt(document.getElementById('inputDiaLojaFixo').value);
+      const turno = document.getElementById('selectTurnoLojaFixo').value;
+      const slot = parseInt(document.getElementById('selectSlotLojaFixo').value) || 1;
+
+      if (!pessoa || !dia || dia < 1 || dia > 31) {
+        alert("Por favor, escolha um dia válido (1 a 31).");
+        return;
+      }
+
+      plantoesLojaFixos.push({ pessoa, dia, turno, slot });
+      document.getElementById('inputDiaLojaFixo').value = '';
+      
+      renderPlantoesLojaFixos();
+      aplicarPlantoesFixosNoGrid();
+      atualizarEstatisticas();
+      salvarDados();
+    }
+
+    function removerPlantaoLojaFixo(idx) {
+      const p = plantoesLojaFixos[idx];
+      if (p) {
+        const slotNum = p.slot || 1;
+        if (p.turno === "Manhã" || p.turno === "Dia Todo") {
+          const slot = document.getElementById(`slot_${p.dia}_M${slotNum}`);
+          if (slot) { slot.innerText = '--'; slot.style.backgroundColor = '#ffffff'; }
+        }
+        if (p.turno === "Tarde" || p.turno === "Dia Todo") {
+          const slot = document.getElementById(`slot_${p.dia}_T${slotNum}`);
+          if (slot) { slot.innerText = '--'; slot.style.backgroundColor = '#ffffff'; }
+        }
+      }
+
+      plantoesLojaFixos.splice(idx, 1);
+      renderPlantoesLojaFixos();
+      atualizarEstatisticas();
+      salvarDados();
+    }
+
+    function renderPlantoesLojaFixos() {
+      const container = document.getElementById('listaPlantoesLojaFixos');
+      container.innerHTML = '';
+
+      if (plantoesLojaFixos.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 italic">Nenhum plantão de loja fixado.</p>`;
+        return;
+      }
+
+      plantoesLojaFixos.forEach((p, idx) => {
+        const div = document.createElement('div');
+        div.className = "flex justify-between items-center text-xs p-1.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-lg";
+        div.innerHTML = `
+          <span><strong>Dia ${p.dia}</strong> (${p.turno} - Slot ${p.slot || 1}): <span class="font-bold text-emerald-700">${p.pessoa}</span></span>
+          <i class="fa-solid fa-trash cursor-pointer text-red-600 hover:text-red-800" onclick="removerPlantaoLojaFixo(${idx})"></i>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function alterarMesAno() {
+      tabelaEstilosEConteudo = {}; // Limpa memória de células ao trocar de mês
+      gerarTabelaEstrutura(true);
+    }
+
+    function gerarTabelaEstrutura(resetMemory = false) {
+      const mes = parseInt(document.getElementById('selectMes').value);
+      const ano = parseInt(document.getElementById('inputAno').value);
+      const nomesMeses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+      
+      document.getElementById('txtMesAnoHeader').innerText = `${nomesMeses[mes]} / ${ano}`;
+
+      const container = document.getElementById('containerTabela');
+      container.innerHTML = '';
+
+      const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+      let diasSemanaBuffer = [];
+
+      for (let dia = 1; dia <= diasNoMes; dia++) {
+        const dt = new Date(ano, mes, dia);
+        diasSemanaBuffer.push({ dia, data: dt, diaSemana: dt.getDay() });
+
+        if (dt.getDay() === 0 || dia === diasNoMes) {
+          montarBlocoSemana(diasSemanaBuffer);
+          diasSemanaBuffer = [];
+        }
+      }
+
+      // Restaura cores e nomes guardados se existirem
+      if (!resetMemory && Object.keys(tabelaEstilosEConteudo).length > 0) {
+        Object.keys(tabelaEstilosEConteudo).forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.style.backgroundColor = tabelaEstilosEConteudo[id].bg;
+            if (tabelaEstilosEConteudo[id].text) {
+              el.innerText = tabelaEstilosEConteudo[id].text;
+            }
+          }
+        });
+      } else {
+        aplicarPlantoesFixosNoGrid();
+      }
+
+      atualizarEstatisticas();
+      salvarDados();
+    }
+
+    function montarBlocoSemana(dias) {
+      const container = document.getElementById('containerTabela');
+      const diasNomes = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+      let tableHtml = `
+        <table class="excel-table">
+          <thead>
+            <tr>
+              <th class="td-shift-label"></th>
+      `;
+
+      // Header Dias da Semana (Com IDs únicos para salvar cores)
+      dias.forEach(d => {
+        tableHtml += `<th colspan="2" id="th_day_${d.dia}" class="th-day" onclick="toggleColor(this)">${diasNomes[d.diaSemana]}</th>`;
+      });
+      tableHtml += `</tr><tr><th class="td-shift-label" style="font-size: 9.5px;">Turno / Data</th>`;
+
+      // Header Datas
+      dias.forEach(d => {
+        const strData = `${String(d.dia).padStart(2,'0')}/${String(d.data.getMonth()+1).padStart(2,'0')}`;
+        tableHtml += `<th colspan="2" id="th_date_${d.dia}" class="th-date" onclick="toggleColor(this)">${strData}</th>`;
+      });
+      tableHtml += `</tr></thead><tbody>`;
+
+      // Linha Manhã
+      tableHtml += `<tr><td class="td-shift-label">Manhã 09h-13h</td>`;
+      dias.forEach(d => {
+        tableHtml += `
+          <td class="td-cell" id="slot_${d.dia}_M1" onclick="toggleColor(this)">--</td>
+          <td class="td-cell" id="slot_${d.dia}_M2" onclick="toggleColor(this)">--</td>
+        `;
+      });
+      tableHtml += `</tr>`;
+
+      // Linha Tarde
+      tableHtml += `<tr><td class="td-shift-label">Tarde 13h-18h</td>`;
+      dias.forEach(d => {
+        tableHtml += `
+          <td class="td-cell" id="slot_${d.dia}_T1" onclick="toggleColor(this)">--</td>
+          <td class="td-cell" id="slot_${d.dia}_T2" onclick="toggleColor(this)">--</td>
+        `;
+      });
+      tableHtml += `</tr></tbody></table>`;
+
+      const div = document.createElement('div');
+      div.className = "w-full overflow-x-auto";
+      div.innerHTML = tableHtml;
+      container.appendChild(div);
+    }
+
+    function toggleColor(element) {
+      const rgbAtual = window.getComputedStyle(element).backgroundColor;
+      const hexAtual = rgbToHex(rgbAtual);
+
+      if (hexAtual.toLowerCase() === corPincelAtiva.toLowerCase()) {
+        element.style.backgroundColor = "#ffffff";
+      } else {
+        element.style.backgroundColor = corPincelAtiva;
+      }
+
+      atualizarEstatisticas();
+      salvarDados();
+    }
+
+    function rgbToHex(rgb) {
+      if (!rgb || rgb === "transparent") return "#ffffff";
+      const res = rgb.match(/\d+/g);
+      if (!res) return "#ffffff";
+      return "#" + ((1 << 24) + (parseInt(res[0]) << 16) + (parseInt(res[1]) << 8) + parseInt(res[2])).toString(16).slice(1);
+    }
+
+    function limparCoresTabela() {
+      document.querySelectorAll('.excel-table th, .excel-table td').forEach(cell => {
+        if (!cell.classList.contains('td-shift-label')) {
+          cell.style.backgroundColor = '#ffffff';
+        }
+      });
+      salvarDados();
+    }
+
+    function ehDataBloqueada(pessoa, ano, mes, dia, turno) {
+      const dataSlot = new Date(ano, mes, dia);
+
+      return restricoes.some(r => {
+        if (r.pessoa !== pessoa) return false;
+        
+        const partsIni = r.dataInicio.split('-');
+        const dIni = new Date(parseInt(partsIni[0]), parseInt(partsIni[1])-1, parseInt(partsIni[2]));
+        
+        const partsFim = r.dataFim.split('-');
+        const dFim = new Date(parseInt(partsFim[0]), parseInt(partsFim[1])-1, parseInt(partsFim[2]));
+
+        if (dataSlot >= dIni && dataSlot <= dFim) {
+          if (r.turno === "Qualquer" || r.turno === turno) return true;
+        }
+        return false;
+      });
+    }
+
+    function gerarEscalaAutomatica() {
+      if (membros.length < 2) {
+        alert("Por favor, adicione pelo menos 2 pessoas à equipa.");
+        return;
+      }
+
+      gerarTabelaEstrutura(true);
+
+      const mes = parseInt(document.getElementById('selectMes').value);
+      const ano = parseInt(document.getElementById('inputAno').value);
+      const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+
+      let contagem = {};
+      membros.forEach(m => contagem[m] = 0);
+
+      plantoesLojaFixos.forEach(p => {
+        if (membros.includes(p.pessoa)) {
+          if (p.turno === "Dia Todo") contagem[p.pessoa] += 2;
+          else contagem[p.pessoa] += 1;
+        }
+      });
+
+      for (let dia = 1; dia <= diasNoMes; dia++) {
+        const fixoM1 = plantoesLojaFixos.find(p => p.dia === dia && (p.turno === "Manhã" || p.turno === "Dia Todo") && (p.slot || 1) === 1);
+        const fixoM2 = plantoesLojaFixos.find(p => p.dia === dia && (p.turno === "Manhã" || p.turno === "Dia Todo") && p.slot === 2);
+
+        const fixoT1 = plantoesLojaFixos.find(p => p.dia === dia && (p.turno === "Tarde" || p.turno === "Dia Todo") && (p.slot || 1) === 1);
+        const fixoT2 = plantoesLojaFixos.find(p => p.dia === dia && (p.turno === "Tarde" || p.turno === "Dia Todo") && p.slot === 2);
+
+        let pM1 = fixoM1 ? fixoM1.pessoa : escolherPessoa(dia, "Manhã", [], contagem, ano, mes);
+        let pM2 = fixoM2 ? fixoM2.pessoa : escolherPessoa(dia, "Manhã", [pM1], contagem, ano, mes);
+
+        let pT1 = fixoT1 ? fixoT1.pessoa : escolherPessoa(dia, "Tarde", [], contagem, ano, mes);
+        let pT2 = fixoT2 ? fixoT2.pessoa : escolherPessoa(dia, "Tarde", [pT1], contagem, ano, mes);
+
+        const elM1 = document.getElementById(`slot_${dia}_M1`);
+        const elM2 = document.getElementById(`slot_${dia}_M2`);
+        const elT1 = document.getElementById(`slot_${dia}_T1`);
+        const elT2 = document.getElementById(`slot_${dia}_T2`);
+
+        if (elM1) { elM1.innerText = pM1; if (fixoM1) elM1.style.backgroundColor = '#a9d08e'; }
+        if (elM2) { elM2.innerText = pM2; if (fixoM2) elM2.style.backgroundColor = '#a9d08e'; }
+        if (elT1) { elT1.innerText = pT1; if (fixoT1) elT1.style.backgroundColor = '#a9d08e'; }
+        if (elT2) { elT2.innerText = pT2; if (fixoT2) elT2.style.backgroundColor = '#a9d08e'; }
+      }
+
+      atualizarEstatisticas();
+      salvarDados();
+    }
+
+    function escolherPessoa(dia, turno, jaEscalados, contagem, ano, mes) {
+      let disponiveis = membros.filter(m => {
+        if (jaEscalados.includes(m)) return false;
+        return !ehDataBloqueada(m, ano, mes, dia, turno);
+      });
+
+      if (disponiveis.length === 0) return "VAGO";
+
+      disponiveis.sort((a, b) => contagem[a] - contagem[b]);
+      const menorQtd = contagem[disponiveis[0]];
+      const candidatos = disponiveis.filter(m => contagem[m] === menorQtd);
+
+      const escolhido = candidatos[Math.floor(Math.random() * candidatos.length)];
+      contagem[escolhido]++;
+      return escolhido;
+    }
+
+    function atualizarEstatisticas() {
+      const container = document.getElementById('painelEstatisticas');
+      if (!container) return;
+
+      container.innerHTML = '';
+
+      let stats = {};
+      let statsLoja = {};
+      membros.forEach(m => { stats[m] = 0; statsLoja[m] = 0; });
+
+      const celulas = document.querySelectorAll('.td-cell');
+      celulas.forEach(c => {
+        const nome = c.innerText.trim();
+        if (membros.includes(nome)) {
+          stats[nome] = (stats[nome] || 0) + 1;
+          const bg = rgbToHex(window.getComputedStyle(c).backgroundColor).toLowerCase();
+          if (bg === "#a9d08e") {
+            statsLoja[nome] = (statsLoja[nome] || 0) + 1;
+          }
+        }
+      });
+
+      membros.forEach(m => {
+        const div = document.createElement('div');
+        div.className = "flex justify-between items-center bg-slate-50 p-1.5 rounded border border-slate-200";
+        div.innerHTML = `
+          <span class="font-bold text-slate-700">${m}</span>
+          <div class="flex items-center gap-2">
+            <span class="bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded text-[11px] font-semibold" title="Total de Turnos">
+              ${stats[m]} turnos
+            </span>
+            <span class="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[11px] font-bold" title="Plantão de Loja">
+              <i class="fa-solid fa-store text-[10px] mr-0.5"></i> ${statsLoja[m]}
+            </span>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function exportPNG() {
+      const element = document.getElementById('scheduleCapture');
+      html2canvas(element, { scale: 2, useCORS: true }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = 'Escala_Plantao_Loja.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      });
+    }
+
+    function exportPDF() {
+      const element = document.getElementById('scheduleCapture');
+      const opt = {
+        margin:       [3, 3, 3, 3],
+        filename:     'Escala_Plantao_Loja.pdf',
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+      };
+      html2pdf().set(opt).from(element).save();
+    }
+
+    // Inicialização
+    carregarDadosIniciais();
+  </script>
+</body>
+</html>
